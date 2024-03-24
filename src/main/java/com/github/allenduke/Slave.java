@@ -40,12 +40,16 @@ public class Slave<K, V> extends Node<K, V> {
         /**
          * 事务在prepare和部分提交状态不可以读到最新。
          * 一种做法是发现有事务且未完成，从leader处读取数据。
-         * 另一种做法是只在部分提交阶段才从leader出读取。
+         * 另一种做法是只在部分提交阶段才从leader出读取。（减少阻塞时间）
          */
 
 
-        if(committedButNotComplete.containsKey(k)){
+        if (committedButNotComplete.containsKey(k)) {
             // 可能在部分提交状态
+            V v = leader.queryKFromSlaveWhileHalfCommit(this, k);
+            if (v == null) {
+                return map.get(k);
+            }
         }
         return super.get(k);
     }

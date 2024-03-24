@@ -44,13 +44,19 @@ public class Leader<K, V> extends Node<K, V> {
             // 提交
             for (Slave<K, V> slave : slaveList) {
                 slave.commit(k);
-                // 可能因为leader gc停顿而导致slave先读取最新，但仍然一致
+            }
+
+            // 全部提交完成
+
+            v = super.set(k, v);
+
+            for (Slave<K, V> slave : slaveList) {
                 Set<Slave<K, V>> slaves = kCompleteSlaveNotifySetMap.computeIfAbsent(k, key -> new HashSet<>());
                 synchronized (slaves) {
                     slaves.add(slave);
                 }
             }
-            v = super.set(k, v);
+
             // 异步通知salve 可读最新
             asyncNotifyK(k);
             return v;
@@ -80,19 +86,14 @@ public class Leader<K, V> extends Node<K, V> {
                 // 当前slave已通知可读最新
                 return null;
             }
-            return
+            // 通知可读
+            slave.complete(k);
+            return slave.get(k);
         }
     }
 
     public void asyncNotifyK(K k) {
         executorService.submit(() -> {
-            for (Slave<K, V> slave : slaveList) {
-                slave.commit(k);
-                Set<Slave<K, V>> slaves = kCompleteSlaveNotifySetMap.computeIfAbsent(k, key -> new HashSet<>());
-                synchronized (slaves) {
-                    slaves.add(slave);
-                }
-            }
             Set<Slave<K, V>> slaves = kCompleteSlaveNotifySetMap.get(k);
             // 构建一个当前视图
             Set<Slave<K, V>> view = new HashSet<>(slaves);
