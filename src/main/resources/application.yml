@@ -1,0 +1,13 @@
+logging:
+  level:
+    root: INFO
+  file:
+    name: kv.log
+
+kv:
+  data:
+    dir: /tmp/kv # 存储数据的目录 数据将存储在 dir/{dbName}.data中
+
+inside:
+  bossSize: 1 # 处理系统内部连接的线程数
+  workerSize: 4 # 处理系统内部通信的线程数
