@@ -25,7 +25,7 @@ public class EventHandler extends SimpleChannelInboundHandler {
     private Cluster Cluster;
 
     @Resource
-    private Node<String, String> node;
+    private Node node;
 
     @Override
     protected void channelRead0(ChannelHandlerContext ctx, Object msg) throws Exception {

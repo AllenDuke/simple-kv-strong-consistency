@@ -9,6 +9,7 @@ import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
+import io.netty.channel.ChannelPipeline;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -39,6 +40,8 @@ public class Node {
 
     private NodeRoleEnum nodeRoleEnum;
 
+    private ChannelPipeline channelPipeline;
+
     private AtomicLong lastInstructionId = new AtomicLong(0);
 
     private LoadingCache<String, ReadWriteLock> lockCache = CacheBuilder.newBuilder()
@@ -60,6 +63,18 @@ public class Node {
 
         // 节点
         nodeRoleEnum = NodeRoleEnum.CANDIDATE;
+    }
+
+    public ChannelPipeline getChannelPipeline() {
+        return channelPipeline;
+    }
+
+    public void setChannelPipeline(ChannelPipeline channelPipeline) {
+        this.channelPipeline = channelPipeline;
+    }
+
+    private void election() throws IOException {
+
     }
 
     private void recover() throws IOException {

@@ -17,13 +17,18 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 public class StorageStarter {
 
     public static void main(String[] args) {
-        // 客户端通信端口
-        System.setProperty("server.port", args[0]);
-
-        System.setProperty("node.id", args[1]);
-
+        System.setProperty("node.id", args[0]);
         // 系统内部通信端口
         System.setProperty("node.port", args[1]);
+
+        // 客户端通信端口
+        System.setProperty("server.port", args[2]);
+
+        String others = "";
+        for (int i = 3; i < args.length; i++) {
+            others += args[i] + ",";
+        }
+        System.setProperty("node.others", others);
 
         SpringApplication.run(StorageStarter.class, args);
     }

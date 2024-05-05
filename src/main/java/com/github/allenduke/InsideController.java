@@ -4,6 +4,7 @@
 
 package com.github.allenduke;
 
+import com.github.allenduke.cluster.Cluster;
 import com.github.allenduke.cluster.EventHandler;
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.channel.ChannelFuture;
@@ -22,7 +23,10 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import javax.annotation.PostConstruct;
+import javax.annotation.Resource;
+import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -46,41 +50,64 @@ public class InsideController {
     @Value("${inside.workerSize}")
     private Integer workerSize;
 
+    @Resource
+    private Cluster cluster;
+
+    @Resource
+    private Node node;
+
     @PostConstruct
     public void start() {
-        EventLoopGroup bossGroup = new NioEventLoopGroup(bossSize);
-        EventLoopGroup workerGroup = new NioEventLoopGroup(workerSize);
-        try {
-            ServerBootstrap serverBootstrap = new ServerBootstrap();
-            /**
-             * 开启tcp keepAlive,，当开启后，会有tcp层面上的心跳机制，我们应该关闭而去做我们自己的更为定制化的心跳探测
-             */
-            //serverBootstrap.childOption(ChannelOption.SO_KEEPALIVE,true);
-            serverBootstrap.group(bossGroup, workerGroup)
-                    .channel(NioServerSocketChannel.class)
-                    .childHandler(
-                            new ChannelInitializer<SocketChannel>() {
-                                @Override
-                                protected void initChannel(SocketChannel ch) throws Exception {
-                                    ChannelPipeline pipeline = ch.pipeline();
-                                    pipeline.addLast(new StringDecoder(StandardCharsets.UTF_8));
-                                    pipeline.addLast(new StringEncoder(StandardCharsets.UTF_8));
+        new Thread(() -> {
+            EventLoopGroup bossGroup = new NioEventLoopGroup(bossSize);
+            EventLoopGroup workerGroup = new NioEventLoopGroup(workerSize);
+            try {
+                ServerBootstrap serverBootstrap = new ServerBootstrap();
+                /**
+                 * 开启tcp keepAlive,，当开启后，会有tcp层面上的心跳机制，我们应该关闭而去做我们自己的更为定制化的心跳探测
+                 */
+                //serverBootstrap.childOption(ChannelOption.SO_KEEPALIVE,true);
+                serverBootstrap.group(bossGroup, workerGroup)
+                        .channel(NioServerSocketChannel.class)
+                        .childHandler(
+                                new ChannelInitializer<SocketChannel>() {
+                                    @Override
+                                    protected void initChannel(SocketChannel ch) throws Exception {
+                                        ChannelPipeline pipeline = ch.pipeline();
+                                        pipeline.addLast(new StringDecoder(StandardCharsets.UTF_8));
+                                        pipeline.addLast(new StringEncoder(StandardCharsets.UTF_8));
 
-                                    // 使用心跳可以更早发现故障
-                                    pipeline.addLast(new IdleStateHandler( 100, 100, 100, TimeUnit.MILLISECONDS));
+                                        // 使用心跳可以更早发现故障
+                                        pipeline.addLast(new IdleStateHandler(100, 100, 100, TimeUnit.MILLISECONDS));
 
-                                    pipeline.addLast(new EventHandler());
+                                        pipeline.addLast(new EventHandler());
+
+                                        node.setChannelPipeline(pipeline);
+
+                                        cluster.getAllMap().forEach((id, node) -> {
+                                            InetSocketAddress address = new InetSocketAddress(node.getIp(), node.getPort());
+                                            pipeline.connect(address).addListener(future -> {
+                                                try {
+                                                    future.get();
+                                                } catch (Exception e) {
+                                                    logger.error("remote node：{} 连接失败", node);
+                                                    cluster.offline(id);
+                                                }
+                                            });
+                                        });
+                                    }
                                 }
-                            }
-                    );
-            ChannelFuture channelFuture = serverBootstrap.bind(port).sync();
-            logger.info("server is ready! ");
-            channelFuture.channel().closeFuture().sync();
-        } catch (Exception e) {
-            logger.error("节点启动失败", e);
-        } finally {
-            bossGroup.shutdownGracefully();
-            workerGroup.shutdownGracefully();
-        }
+                        );
+                ChannelFuture channelFuture = serverBootstrap.bind(port).sync();
+                logger.info("server is ready! ");
+                channelFuture.channel().closeFuture().sync();
+            } catch (Exception e) {
+                logger.error("节点启动失败", e);
+            } finally {
+                bossGroup.shutdownGracefully();
+                workerGroup.shutdownGracefully();
+            }
+        }).start();
+
     }
 }
